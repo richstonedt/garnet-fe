@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html xmlns:v-bind="http://www.w3.org/1999/xhtml">
+<head>
+    <title>租户管理</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+    <link rel="stylesheet" href="../css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/font-awesome.min.css">
+    <link rel="stylesheet" href="../plugins/jqgrid/ui.jqgrid-bootstrap.css">
+    <link rel="stylesheet" href="../plugins/ztree/css/metroStyle/metroStyle.css">
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../libs/sweetalert/sweetalert.css">
+    <script src="../libs/jquery-3.4.1-responseurl.min.js"></script>
+    <script src="../plugins/layer/layer.js"></script>
+    <script src="../libs/bootstrap.min.js"></script>
+    <script src="../libs/vue.min.js"></script>
+    <script src="../plugins/jqgrid/grid.locale-cn.js"></script>
+    <script src="../plugins/jqgrid/jquery.jqGrid.min.js"></script>
+    <script src="../plugins/ztree/jquery.ztree.all.min.js"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../libs/sweetalert/sweetalert.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="../plugins/component/select-vue-component.css">
+    <script src="../plugins/component/select-vue-component.js"></script>
+    <script>    
+    var resources = JSON.parse(localStorage.getItem('sysAppCode'));
+    </script>
+</head>
+
+<body>
+<div id="garnetApp" v-cloak style="margin: 15px;">
+    <div v-show="showList">
+        <div class="grid-btn">
+            <div class="form-group col-sm-2">
+                <!--<input class="form-control" v-bind:readonly="!resources.garnetSysManagementTenantSearchBox" v-model="searchName" @keyup.enter="query" placeholder="租户名称">-->
+                <input class="form-control" v-model="searchName" @keyup.enter="query" placeholder="租户名称">
+            </div>
+            <a class="btn btn-default" @click="query">查询</a>
+
+            <div class="form-group col-sm-2">
+                <select class="form-control" v-model="modeList.selectedMode" @change="selectMode" id="selectModeId">
+                    <!--<option disabled value=""> -&#45;&#45;&#45;&#45;请选择模式-&#45;&#45;&#45;&#45;</option>-->
+                    <option v-for="option in modeList.options" v-bind:value="option.id" >
+                        {{ option.name }}
+                    </option>
+                </select>
+            </div>
+
+            <a class="btn btn-primary" @click="add" v-if="resources.garnetSysManagementTenantAdd">
+                <i class="fa fa-plus"></i>&nbsp;新增</a>
+            <!-- <a class="btn btn-primary" @click="update" v-if="resources.garnetSysManagementTenantUpdate">
+                <i class="fa fa-pencil-square-o"></i>&nbsp;修改</a> -->
+            <a class="btn btn-primary" @click="del"  v-if="resources.garnetSysManagementTenantDelete">
+                <i class="fa fa-trash-o"></i>&nbsp;删除</a>
+
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label">关联用户</div>-->
+                <!--<div class="col-sm-2">-->
+                    <!--<input class="form-control" v-model="userName" placeholder="关联用户"/>-->
+                <!--</div>-->
+            <!--</div>-->
+        </div>
+        <table id="jqGrid"></table>
+        <div id="jqGridPager"></div>
+    </div>
+
+    <div v-show="!showList" class="panel panel-default">
+        <div class="panel-heading">{{title}}</div>
+        <form class="form-horizontal">
+            <div class="form-group" style="display: none;">
+                <div class="col-sm-2 control-label">租户Id</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="tenant.id" placeholder="租户名称"/>
+                </div>
+            </div>
+            <div class="form-group"  v-show="!hidden">
+                <div class="col-sm-2 control-label">平台模式<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <select class="form-control" v-model="modeList2.selectedMode" @change="selectMode2" id="modeListId" :disabled="!modeEditAble">
+                        <option disabled value="">--请选择--</option>
+                        <option v-for="option in modeList2.options" v-bind:value="option.id">
+                            {{ option.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">租户名称<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="tenant.name" placeholder="长度不大于30" maxlength="30"/>
+                </div>
+            </div>
+
+            <div class="form-group" v-bind:hidden="relateUsersHidden">
+                <div class="col-sm-2 control-label"></div>
+                <div class="col-sm-10">
+                    <label>是否默认关联所有用户</label>
+                    <select v-model="tenant.relatedAllUsers" :disabled="!relatedAllUserEditAble">
+                        <!--<option disabled value="">请选择</option>-->
+                        <option value="Y">是</option>
+                        <option selected="selected" value="N">否</option>
+                    </select>
+
+                </div>
+            </div>
+
+            <div class="form-group" style="display: none;">
+                <div class="col-sm-2 control-label">创建时间</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="tenant.createdTime" placeholder="创建时间"/>
+                </div>
+            </div>
+            <div class="form-group" style="display: none;">
+                <div class="col-sm-2 control-label">更新时间</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="tenant.modifiedTime" placeholder="更新时间"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">备注</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="tenant.description" placeholder="备注" maxlength="250"/>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="col-sm-2 control-label">关联用户</div>
+                <div class="col-sm-10">
+                        <input class="form-control" v-model="userNames" placeholder="可用“,”分隔，一次性关联多个用户"/>
+                        <a href="javascript:void(0);" @click="reviewUser"  v-bind:hidden="reviewHidden"><i class="fa fa fa-user"></i>&nbsp;查看已关联用户</a>
+                </div>
+            </div>
+
+            <!--<div class="form-group" v-show="hidden">-->
+                <!--<div class="col-sm-2 control-label">取消用户关联</div>-->
+                <!--<div class="col-sm-10">-->
+                    <!--<input class="form-control" v-model="delRelatedUserNames" placeholder="garnet和admin不能取消关联;多个用户之间用“,”分隔"/>-->
+                <!--</div>-->
+            <!--</div>-->
+
+            <div class="form-group">
+                <div class="col-sm-2 control-label">选择应用</div>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" style="cursor:pointer;" v-model="tenant.appNames"
+                           @click="appTree(tenant)" readonly="readonly" v-bind:placeholder="tips"></input>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="col-sm-2 control-label"></div>
+                <!--<input type="button" class="btn btn-primary" @click="saveOrUpdate" value="确定" :disabled="!tenantUpdateButton"/>-->
+                <input type="button" class="btn btn-primary" @click="saveOrUpdate" value="确定"/>
+                &nbsp;&nbsp;<input type="button" class="btn btn-warning" @click="reload(false)" value="返回"/>
+            </div>
+        </form>
+        <input type="button" class="btn btn-warning floating-btn" @click="reload(false)" value="返回"/>
+    </div>
+</div>
+
+<!-- 选择应用 -->
+<!--<div id="appLayerDiv">-->
+<div id="appLayer" style="display:none;padding:10px;">
+    <!--<form class="form-horizontal" style="width: 280px;">-->
+        <div class="form-group">
+            <div class="col-sm-10">
+                <input class="form-control" placeholder="应用名" id="laySearchName" autocomplete="off">
+            </div>
+            <div class="col-sm-2">
+                <input type="button" class="btn btn-default"  id="laySearch" value="search"/>
+            </div>
+        </div>
+        <div class="form-group" style="padding-top: 20px;">
+            <ul id="appTree" class="ztree"></ul>
+        </div>
+    <!--</form>-->
+</div>
+<!--</div>-->
+<!--<div id="appLayer">-->
+    <!--<div class="col-sm-10">-->
+        <!--<input class="form-control" placeholder="应用名" id="laySearchName" autocomplete="off">-->
+    <!--</div>-->
+<!--</div>-->
+
+<script src="../libs/router.js"></script>
+<!-- <script src="../js/index.js"></script> -->
+<script src="../js/modules/tenant.js"></script>
+</body>
+</html>

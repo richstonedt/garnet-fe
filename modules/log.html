@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>系统日志</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+    <link rel="stylesheet" href="../css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/font-awesome.min.css">
+    <link rel="stylesheet" href="../plugins/jqgrid/ui.jqgrid-bootstrap.css">
+    <link rel="stylesheet" href="../plugins/ztree/css/metroStyle/metroStyle.css">
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../libs/sweetalert/sweetalert.css">
+    <script src="../libs/jquery-3.4.1-responseurl.min.js"></script>
+    <script src="../plugins/layer/layer.js"></script>
+    <script src="../libs/bootstrap.min.js"></script>
+    <script src="../libs/vue.min.js"></script>
+    <script src="../plugins/jqgrid/grid.locale-cn.js"></script>
+    <script src="../plugins/jqgrid/jquery.jqGrid.min.js"></script>
+    <script src="../plugins/ztree/jquery.ztree.all.min.js"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../libs/sweetalert/sweetalert.min.js"></script>
+    <script src="../libs/laydate/laydate.js"></script>
+    <script>    
+        var resources = JSON.parse(localStorage.getItem('sysAppCode'));
+    </script>
+</head>
+
+<body>
+<div id="garnetApp" v-cloak style="margin: 15px;">
+    <div v-show="showList">
+        <div class="grid-btn">
+            <div class="form-group col-sm-2">
+                <input class="form-control" v-model="searchName" @keyup.enter="query" placeholder="请输入用户名">
+            </div>
+            <div class="form-group col-sm-2">
+                <input class="form-control" v-model="operation" @keyup.enter="query" placeholder="请输入用户操作">
+            </div>
+
+            <div class="form-group col-sm-2">
+                <input class="form-control" id="startDateInput" readonly="readonly" @keyup.enter="query" placeholder="请输入开始时间">
+            </div>
+            <div class="form-group col-sm-2">
+                <input class="form-control" id="endDateInput" readonly="readonly" @keyup.enter="query" placeholder="请输入结束时间">
+            </div>
+            <div class="form-group col-sm-2">
+                <input class="form-control" v-model="message" @keyup.enter="query" placeholder="请输入操作内容">
+            </div>
+            <a class="btn btn-primary log-search-btn" @click="query">查询</a>
+            <a class="btn btn-primary " @click="exportExcel">导出 Excel</a>
+            <!-- <a class="btn btn-primary log-detail-btn" @click="detail">
+                <i class="fa fa-align-justify"></i>&nbsp;详情</a> -->
+        </div>
+        <table id="jqGrid"></table>
+        <div id="jqGridPager"></div>
+    </div>
+
+    <div v-show="!showList" class="panel panel-default">
+        <div class="panel-heading">{{title}}</div>
+        <form class="form-horizontal">
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label" style="font-size: 15px"><b>ID:</b></div>-->
+                <!--<div class="col-sm-10" style="margin-top: 7px">-->
+                    <!--{{log.id}}-->
+                <!--</div>-->
+            <!--</div>-->
+            <div class="form-group">
+                <div class="col-sm-2 control-label" style="font-size: 15px"><b>用户名:</b></div>
+                <div class="col-sm-10" style="margin-top: 7px">
+                    {{log.userName}}
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label" style="font-size: 15px"><b>用户操作:</b></div>
+                <div class="col-sm-10" style="margin-top: 7px">
+                    {{log.operation}}
+                </div>
+            </div>
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label" style="font-size: 15px"><b>请求方法:</b></div>-->
+                <!--<div class="col-sm-10" style="margin-top: 7px">-->
+                    <!--{{log.method}}-->
+                <!--</div>-->
+            <!--</div>-->
+
+
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label" style="font-size: 15px"><b>请求方法:</b></div>-->
+                <!--<div class="col-sm-10" style="margin-top: 7px">-->
+                    <!--<span>{{log.method}}</span>-->
+                <!--</div>-->
+            <!--</div>-->
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label" style="font-size: 15px"><b>请求URL:</b></div>-->
+                <!--<div class="col-sm-10" style="margin-top: 7px">-->
+                    <!--<span>{{log.url}}</span>-->
+                <!--</div>-->
+            <!--</div>-->
+            <div class="form-group">
+                <div class="col-sm-2 control-label" style="font-size: 15px"><b>IP地址:</b></div>
+                <div class="col-sm-10" style="margin-top: 7px">
+                    <span>{{log.ip}}</span>
+                </div>
+            </div>
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label" style="font-size: 15px"><b>执行SQL:</b></div>-->
+                <!--<div class="col-sm-10" style="margin-top: 7px">-->
+                    <!--<span v-for="item in sql">-->
+                        <!--{{item}};<br /><br />-->
+                    <!--</span>-->
+                <!--</div>-->
+            <!--</div>-->
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label" style="font-size: 15px"><b>执行sql:</b></div>-->
+                <!--<div class="col-sm-10" style="margin-top: 7px">-->
+                    <!--{{log.sql}}-->
+                <!--</div>-->
+            <!--</div>-->
+            <div class="form-group">
+                <div class="col-sm-2 control-label" style="font-size: 15px"><b>记录时间:</b></div>
+                <div class="col-sm-10" style="margin-top: 7px">
+                    <!--<span>{{log.createTime}}</span>-->
+                    <span>{{formatTime}}</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label"></div>
+                <input type="button" class="btn btn-warning" @click="back" value="返回"/>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="../libs/router.js"></script>
+<!-- <script src="../js/index.js"></script> -->
+<script src="../js/modules/log.js"></script>
+</body>
+</html>

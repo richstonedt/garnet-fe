@@ -1,0 +1,774 @@
+
+$(function () {
+    /** 初始化角色列表 */
+    $("#jqGrid").jqGrid({
+        url: baseURL + 'roles',
+        datatype: "json",
+        colModel: [
+            {label: '角色ID', name: 'role.id', align: 'center', hidden: true, index: "id", width: 20, key: true ,sortable: false},
+            {label: '角色名称', name: 'role.name', align: 'center', width: 100 ,sortable: false},
+            // {label: '所属租户', name: 'tenantName', align: 'center', width: 70 ,sortable: false},
+            // {label: '所属应用', name: 'applicationName', align: 'center', width: 70 ,sortable: false},
+            {label: '类型', name: 'type', align: 'center', width: 70 ,sortable: false ,sortable: false},
+            {label: '组列表', name: 'groupNames', align: 'left', sortable: false},
+            {label: '权限列表', name: 'permissionNames', align: 'left', sortable: false},
+            {label: '创建时间', name: 'role.createdTime', align: 'center', formatter:timeFormat, width: 100 ,sortable: false},
+            {label: '更新时间', name: 'role.modifiedTime', align: 'center', formatter:timeFormat, width: 100 ,sortable: false},
+            {label: '更改人', name: 'role.updatedByUserName', align: 'center', width: 70 ,sortable: false},
+            {label: '操作', name: 'operation', align: 'center', width: 70 ,sortable: false}
+            // {label: '创建时间', name: 'createTime', align: 'center', width: 90}
+        ],
+        viewrecords: true,
+        height: 385,
+        rowNum: 10,
+        rowList: [10, 30, 50],
+        rownumbers: false,
+        rownumWidth: 25,
+        autowidth: true,
+        multiselect: true,
+        pager: "#jqGridPager",
+        jsonReader: {
+            root: "list",
+            page: "currPage",
+            total: "totalPage",
+            records: "totalCount"
+        },
+        prmNames: {
+            page: "page",
+            rows: "limit"
+        },
+        postData: {
+            userId: userId,
+            token: accessToken
+        },
+        gridComplete: function () {
+            //隐藏grid底部滚动条
+            $("#jqGrid").closest(".ui-jqgrid-bdiv").css({"overflow-x": "hidden"});
+            // 设置表头居中
+            $('.ui-jqgrid .ui-jqgrid-htable .ui-th-div').css('text-align', 'center');
+            // checkBox 对齐
+            $('.ui-jqgrid td input, .ui-jqgrid td select, .ui-jqgrid td textarea').css('margin-left', '6px');
+            $("#jqGrid tr.jqgrow").each(function() {
+                // console.log('this:', this);
+                var TDs = $(this).find('td');
+                TDs.addClass('middleTd');
+                var longTextTd = TDs.eq(5);
+                var text = longTextTd.text();
+                var itemArr = text.split(',');
+                var listHtml = '<ul>';
+                $(itemArr).each(function(i, e) {
+                    listHtml += '<li>' + e + '</li>';
+                });
+                listHtml += '</ul>';
+                longTextTd.attr('data', text);
+                longTextTd.attr('title', itemArr.join('\n'));
+                longTextTd.html('').html('<div class="longTextWraper">' + listHtml + '</div>');
+                // console.log($(this).find('td').eq(5).text());
+                TDs.last().addClass('operationTd').append('<a class="btn btn-primary updateRoleBotton"><i class="fa fa-pencil-square-o"></i>&nbsp;修改</a>');
+            });
+            $('.updateRoleBotton').click(function(e) {
+                e = e || window.event;
+                var roleid = $($(e.currentTarget).parent().parent()[0]).attr('id');
+                vm.update(roleid);
+            });
+            $('.longTextWraper ul').click(function(){
+                // $(this).parent().parent().attr('data');
+                var ulHTML = $(this).prop("outerHTML");
+                var htmlContent = '<div class="itemList">' + ulHTML + '</div>';
+                // console.log(outerHTML);
+                layer.open({
+                    type: 1,
+                    title: "权限列表",
+                    area: ['600px', '400px'],
+                    closeBtn: 0,
+                    shade: 0.3,
+                    zIndex: 1,
+                    shadeClose: false,
+                    // anim: 1,
+                    skin: 'layui-layer-molv',
+                    content: htmlContent,
+                    btn: ['返回'],
+                    btn1: function (index) {
+                        // top.location.reload();
+                        // top.layer.close(index);
+                        layer.close(index);
+                    }
+                });
+            
+
+            });
+        }
+    });
+});
+
+//时间戳 转 Y-M-D
+function timeFormat(cellvalue, options, row) {
+    var date = new Date(cellvalue);
+    var Y = date.getFullYear() + '-';
+    var M = (date.getMonth()+1 < 10 ? '0'+(date.getMonth()+1) : date.getMonth()+1) + '-'; // 0-11月，0代表1月
+    var D = (date.getDate() < 10 ? '0'+(date.getDate()) : date.getDate());
+    var h = (date.getHours() < 10 ? '0' + (date.getHours()) + ':' : date.getHours() + ':');
+    var m = (date.getMinutes() < 10 ? '0' + (date.getMinutes()) + ':' : date.getMinutes() + ':');
+    var s = (date.getSeconds() < 10 ? '0' + (date.getSeconds()) : date.getSeconds());
+    return Y + M + D + "  " + h + m + s;
+}
+
+function getType(cellvalue, options, row) {
+    if (cellvalue == null || cellvalue == 0) {
+        return "应用";
+    } else {
+        return "租户";
+    }
+}
+
+/** 部门结构树 */
+var groupTree;
+var groupTreeSetting = {
+    data: {
+        simpleData: {
+            enable: true,
+            idKey: "groupId",
+            pIdKey: "parentgroupId",
+            rootPId: -1
+        },
+        key: {
+            url: "nourl",
+            name: "name"
+        }
+    },
+    check: {
+        enable: true,
+        nocheckInherit: true,
+        chkboxType: {"Y": "", "N": ""}
+    }
+};
+
+/** 部门结构树 */
+var permissionTree;
+var permissionTreeSetting = {
+    data: {
+        simpleData: {
+            enable: true,
+            idKey: "permissionId"
+        },
+        key: {
+            url: "nourl",
+            name: "name"
+        }
+    },
+    check: {
+        enable: true,
+        nocheckInherit: true,
+        chkboxType: {"Y": "", "N": ""}
+    }
+};
+
+var currentUser;
+
+var vm = new Vue({
+    el: '#garnetApp',
+    data: {
+        resources: resources,
+
+        roleUpdateButton: false,
+
+        typesEditAble: false, //类型选项，是否可以编辑，默认不可编辑
+        showType: true, // 显示类型
+        showByType: true, //根据选择类型选择显示租户级、应用级
+        showTenant: false, //显示租户
+        showApplication: false, //显示应用
+        searchName: null,
+        searchApp: null,
+        searchTenant: null,
+        showList: true,
+        title: null,
+        role: {
+            id: null,
+            tenantId: null,
+            applicationId: null,
+            name: null,
+            remark: null,
+            groupIds: null,
+            permissionIds: null,
+            updatedByUserName: null
+        },
+        // 租户列表数据
+        tenantList: {
+            selectedTenant: "",
+            options: []
+        },
+        // 应用列表数据
+        appList: {
+            selectedApp: "",
+            options: []
+        },
+        tenantSearchList: {
+            searchTenant: "",
+            options: [
+                {
+                    id : "",
+                    name : "全部"
+                }
+            ]
+        },
+        appSearchList: {
+            searchApp: "",
+            options: [
+                {
+                    id : "",
+                    name : "全部"
+                }
+            ]
+        },
+        
+        // 类型列表数据
+        typeList: {
+            selectedType: "",
+            options: [
+                {
+                    id : "1",
+                    name : "租户"
+                },
+                {
+                    id : "2",
+                    name : "应用"
+                },
+                {
+                    id : "3",
+                    name : "租户+应用"
+                }]
+        },
+        // 当前用户信息
+        currentUser: {}
+    },
+    methods: {
+        /**  查询按钮点击事件 */
+        query: function () {
+            vm.reload(true);
+        },
+        /**  新增按钮点击事件 */
+        add: function () {
+
+            vm.roleUpdateButton = true;
+
+            vm.typesEditAble = true;
+            vm.showList = false;
+            vm.showType = true;
+            vm.showTenant = false;
+            vm.showApplication = false;
+            vm.title = "新增";
+            vm.tenantList.selectedTenant = "";
+            vm.tenantList.options = [];
+            vm.role.groupIds = [];
+            vm.role.permissionIds = [];
+            vm.groupIds = [];
+            vm.permissionIds = [];
+            vm.appList.selectedApp = "";
+            vm.appList.options = [];
+            vm.typeList.selectedType = "";
+            vm.role = {
+                id: null,
+                tenantId: null,
+                applicationId: null,
+                name: null,
+                remark: null,
+                groupIds: null,
+                permissionIdList:null
+            };
+            vm.initTreesToAdd();
+            vm.getTenantList();
+            vm.getAppList();
+
+            vm.dealTypeList();
+        },
+        /**  更新按钮点击事件 */
+        update: function (roleId) {
+            // console.log('in update(), this:', this);
+            // return;
+            // var roleId = getSelectedRow();
+            if (!roleId) {
+                return;
+            }
+
+            vm.roleUpdateButton = resources.roleUpdateButton;
+
+            vm.showList = false;
+            vm.showType = true;
+            vm.hiddenByType = false;
+            vm.title = "修改";
+            // vm.appList.selectedApp = "";
+            vm.tenantList.options = [];
+            vm.appList.options = [];
+            vm.role.groupIdList = [];
+            // vm.initTreesToUpdate(roleId);
+            // vm.getTenantList();
+            // vm.getAppList();
+            Promise.all([vm.getTenantList(), vm.getAppList()]).then(function(values){
+                vm.initTreesToUpdate(roleId);
+            });
+            vm.getPermissionAction();
+        },
+        /**  删除按钮点击事件 */
+        del: function () {
+            var roleIds = getSelectedRows();
+
+            if (!roleIds) {
+                return;
+            }
+            window.parent.swal({
+                    title: "确定要删除选中的记录？",
+                    type: "warning",
+                    showCancelButton: true,
+                    closeOnConfirm: false,
+                    confirmButtonText: "确认",
+                    cancelButtonText: "取消",
+                    confirmButtonColor: "#DD6B55"
+                },
+                function () {
+                    $.ajax({
+                        type: "DELETE",
+                        url: baseURL + "roles?ids=" + roleIds.toString(),
+                        contentType: "application/json",
+                        dataType: "",
+                        success: function () {
+                            window.parent.swal("删除成功!", "", "success");
+                            vm.reload(false);
+                        },
+                        error: function (result) {
+                            window.parent.swal("删除失败!", getExceptionMessage(result), "error");
+                        }
+                    });
+                });
+        },
+        /**  新增或更新确认 */
+        saveOrUpdate: function () {
+
+            var obj = new Object();
+            vm.role.updatedByUserName = localStorage.getItem("userName");
+            obj.role = vm.role;
+
+            // 获取部门树选择的部门
+            var groups = groupTree.getCheckedNodes(true);
+
+            var groupIdList = [];
+            for (var i = 0; i < groups.length; i++) {
+                groupIdList.push(groups[i].id);
+            }
+            vm.role.groupIds = groupIdList.join(",");
+            // 获取权限树选择的权限
+            var permissions = permissionTree.getCheckedNodes(true);
+            var permissionIdList = [];
+            for (var i = 0; i < permissions.length; i++) {
+                permissionIdList.push(permissions[i].id);
+            }
+            vm.role.permissionIds = permissionIdList.join(",");
+
+            obj.groupIds = groupIdList;
+            obj.permissionIds = permissionIdList;
+
+            if(vm.role.name == null || $.trim(vm.role.name) == "") {
+                window.parent.swal("", "角色名称不能为空", "warning");
+                return;
+            }
+
+            if ((vm.role.tenantId == null || $.trim(vm.role.tenantId) =="") && (vm.role.applicationId == null || $.trim(vm.role.applicationId) == "")) {
+                window.parent.swal("", "请在选择类型后，选择租户或应用", "warning");
+                    return;
+            }
+
+            if (vm.typeList.selectedType != null && vm.typeList.selectedType != "") {
+                var selectType = vm.typeList.selectedType;
+                if (selectType == 1) {
+                    //租户级
+                    if (vm.role.tenantId == null || $.trim(vm.role.tenantId) == "") {
+                        window.parent.swal("", "租户不能为空", "warning");
+                        return;
+                    }
+                } else if (selectType == 2) {
+                    //应用级
+                    if (vm.role.applicationId == null || $.trim(vm.role.applicationId) == "") {
+                        window.parent.swal("", "应用不能为空", "warning");
+                        return;
+                    }
+                } else if (selectType == 3) {
+                    if ((vm.role.tenantId == null || $.trim(vm.role.tenantId) =="") || (vm.role.applicationId == null || $.trim(vm.role.applicationId) == "")) {
+                        window.parent.swal("", "租户和应用都不能为空", "");
+                        return;
+                    }
+                }
+            }
+
+            if(permissionIdList == null || permissionIdList.length == 0) {
+                window.parent.swal("", "请选择权限", "warning");
+                return;
+            }
+
+            if (vm.role.name.length > 30) {
+                window.parent.swal("", "角色名称长度不能大于30", "");
+                return;
+            }
+
+            $.ajax({
+                type: vm.role.id === null ? "POST" : "PUT",
+                url: baseURL + "roles",
+                contentType: "application/json",
+                data: JSON.stringify(obj),
+                dataType: '',
+                success: function () {
+                    vm.reload(false);
+                    window.parent.swal("操作成功!", "", "success");
+                },
+                error: function (response) {
+                    window.parent.swal("", getExceptionMessage(response), "error");
+                }
+            });
+        },
+        /** 添加按钮初始化数据 */
+        initTreesToAdd: function () {
+            //加载部门树
+            // $.get(baseURL + "groups/" + currentUser.userId, function (response) {
+            $.get(baseURL + "groups?page=1&limit=1000&userId=" + userId, function (response) {
+                const data = [];
+                if (response && response.list && response.list.length > 0) {
+                    $(response.list).each(function(i, e) {
+                        data.push(e.group);
+                    });
+                }
+                groupTree = $.fn.zTree.init($("#groupTree"), groupTreeSetting, data);
+                groupTree.expandAll(true);
+            });
+            //加载权限树
+            // $.get(baseURL + "permissions?page=1&limit=1000", function (response) {
+            $.get(baseURL + "permissions?page=1&limit=1000&userId=" + userId, function (response) {
+                const data = [];
+                if (response && response.list && response.list.length > 0) {
+                    $(response.list).each(function(i, e) {
+                        data.push(e.permission);
+                    });
+                }
+                permissionTree = $.fn.zTree.init($("#permissionTree"), permissionTreeSetting, data);
+                permissionTree.expandAll(true);
+            })
+            // $.get(baseURL + "permissions/applicationId/" + vm.appList.selectedApp, function (response) {
+            //     permissionTree = $.fn.zTree.init($("#permissionTree"), permissionTreeSetting, response);
+            //     permissionTree.expandAll(true);
+            // })
+        },
+        /** 更新按钮初始化数据 */
+        initTreesToUpdate: function (roleId) {
+            vm.getRoleById(roleId);
+            vm.initTree();
+        },
+        /** 通过id 得到一个role对象 */
+        getRoleById: function (roleId) {
+            $.get(baseURL + "roles/" + roleId, function (response) {
+
+                response = response.data;
+                vm.role.id = response.role.id;
+                vm.role.applicationId = response.role.applicationId;
+                vm.role.tenantId = response.role.tenantId;
+                vm.role.name = response.role.name;
+                vm.role.remark = response.role.remark;
+                vm.role.groupIds = response.groupIds;
+                vm.role.permissionIds = response.permissionIds;
+                // vm.tenantList.selectedTenant = response.role.tenantId;
+                // vm.appList.selectedApp = response.role.applicationId;
+
+                var selectedApp = response.role.applicationId;
+                var selectedTenant = response.role.tenantId;
+                var permissionUrl;
+                var groupUrl;
+
+                if (selectedTenant == null || selectedTenant == 0) {
+                    //应用级
+                    vm.typeList.selectedType = "2";
+                    vm.appList.selectedApp = selectedApp;
+                    vm.tenantList.selectedTenant = "";
+                    vm.showTenant = false;
+                    vm.showApplication = true;
+                    // permissionUrl = baseURL + "permissions/applicationId/" + selectedApp;
+                    // groupUrl = baseURL + "groups/applicationId/" + selectedApp;
+                } else if (selectedApp == null || selectedApp == 0) {
+                    //租户级
+                    vm.typeList.selectedType = "1";
+                    vm.tenantList.selectedTenant = selectedTenant;
+                    vm.appList.selectedApp = "";
+                    vm.showApplication = false;
+                    vm.showTenant = true;
+                    // permissionUrl = baseURL + "permissions/tenantId/" + selectedTenant;
+                    // groupUrl = baseURL + "groups/tenantId/" + selectedTenant;
+                } else {
+                    //租户+应用
+                    vm.typeList.selectedType = "3";
+                    vm.appList.selectedApp = selectedApp;
+                    vm.tenantList.selectedTenant = selectedTenant;
+                    vm.showApplication = true;
+                    vm.showTenant = true;
+                    // permissionUrl = baseURL + "permissions/tenantId/" + selectedTenant;
+                    // groupUrl = baseURL + "groups/tenantId/" + selectedTenant;
+                }
+
+                //加载组树
+                $.get(baseURL + "groups/byparams?tenantId=" + vm.tenantList.selectedTenant + "&applicationId=" + vm.appList.selectedApp, function (response) {
+
+                // $.get(groupUrl, function (response) {
+                    groupTree = $.fn.zTree.init($("#groupTree"), groupTreeSetting, response);
+                    groupTree.expandAll(true);
+
+                    $.each(vm.role.groupIds, function (index, item) {
+                        var node = groupTree.getNodeByParam("id", item);
+                        groupTree.checkNode(node, true, false);
+                    });
+                });
+                //加载权限树
+                $.get(baseURL + "permissions/byparams?tenantId=" + vm.tenantList.selectedTenant + "&applicationId=" + vm.appList.selectedApp, function (response) {
+                // $.get(permissionUrl, function (response) {
+                    permissionTree = $.fn.zTree.init($("#permissionTree"), permissionTreeSetting, response);
+                    permissionTree.expandAll(true);
+                    $.each(vm.role.permissionIds, function (index, item) {
+                        var node = permissionTree.getNodeByParam("id", item);
+                        permissionTree.checkNode(node, true, false);
+                    });
+                });
+            });
+        },
+        dealTypeList: function () {
+            var path = "/garnet/option/roleManage/types";
+            $.get(baseURL + "/resources/gettype?userId=" + userId + "&path=" + path, function (response) {
+                var type = response.data;
+                if (type == "001") {
+                    //应用级
+                    $("#typeList option[value='1']").remove();
+                    $("#typeList option[value='3']").remove();
+                } else if (type == "010"){
+                    //租户级
+                    $("#typeList option[value='2']").remove();
+                    $("#typeList option[value='3']").remove();
+                } else if (type == "100") {
+                    //租户+应用
+                    $("#typeList option[value='1']").remove();
+                    $("#typeList option[value='2']").remove();
+                } else if (type == "011") {
+                    //应用级、租户级
+                    $("#typeList option[value='3']").remove();
+                } else if (type == "101") {
+                    //应用级、租户+应用
+                    $("#typeList option[value='1']").remove();
+                } else if (type == "110") {
+                    //租户级、租户+应用
+                    $("#typeList option[value='2']").remove();
+                } else if (type == "111") {
+                    //应用级、租户级、租户+应用
+                } else {
+                    $("#typeList option[value='1']").remove();
+                    $("#typeList option[value='2']").remove();
+                    $("#typeList option[value='3']").remove();
+                }
+            });
+
+        },
+        initTree:function () {
+        },
+        /** 重新加载 */
+        reload: function (backFirst) {
+            vm.showList = true;
+            var page;
+            if(backFirst) {
+                page = 1;
+            }else {
+                page = $("#jqGrid").jqGrid('getGridParam', 'page');
+            }
+            $("#jqGrid").jqGrid('setGridParam', {
+                postData: {
+                    searchName: vm.searchName,
+                    tenantId: vm.tenantSearchList.searchTenant,
+                    applicationId: vm.appSearchList.searchApp
+                },
+                page: page
+            }).trigger("reloadGrid");
+        },
+        /** 租户列表onchange 事件*/
+        selectTenant: function () {
+            vm.role.tenantId = vm.tenantList.selectedTenant;
+            vm.role.applicationId = vm.appList.selectedApp;
+            //重新加载权限
+            vm.roadPermissionTree();
+
+            vm.appList.options = [];
+            vm.appList.selectedApp = "";
+            vm.getAppList();
+        },
+        /** 应用列表onchange 事件*/
+        selectApp: function () {
+            vm.role.tenantId = vm.tenantList.selectedTenant;
+            vm.role.applicationId = vm.appList.selectedApp;
+            vm.roadPermissionTree();
+            // if (vm.tenantList.selectedTenant == null && $.trim(vm.tenantList.selectedTenant) == "") {
+            //     vm.roadPermissionTreeByApp();
+            // }
+        },
+        /** 类型列表onchange 事件*/
+        selectType: function () {
+            vm.tenantList.selectedTenant = "";
+            vm.appList.selectedApp = "";
+            groupTree = $.fn.zTree.init($("#groupTree"), groupTreeSetting, []);
+            permissionTree = $.fn.zTree.init($("#permissionTree"), permissionTreeSetting, []);
+
+            var selectedType = vm.typeList.selectedType;
+            if (selectedType == 1) {
+                //租户级
+                vm.role.applicationId = null;
+                vm.role.tenantId = null;
+                vm.showTenant = true;
+                vm.showApplication = false;
+
+                vm.tenantList.options = [];
+                vm.appList.options = [];
+                vm.getTenantList();
+            } else if (selectedType == 2){
+                //应用级
+                vm.role.tenantId = null;
+                vm.role.applicationId = null;
+                vm.showTenant = false;
+                vm.showApplication = true;
+
+                vm.tenantList.options = [];
+                vm.appList.options = [];
+                vm.getAppList();
+            } else {
+                //租户+应用
+                vm.role.tenantId = null;
+                vm.role.applicationId = null;
+                vm.showTenant = true;
+                vm.showApplication = true;
+
+                vm.tenantList.options = [];
+                vm.appList.options = [];
+                vm.getTenantList();
+            }
+        },
+        /**  获取租户列表 */
+        getTenantList: function () {
+            // $.get(baseURL + "tenants?page=1&limit=1000&userId=" + userId, function (response) {
+            //     $.each(response.list, function (index, item) {
+            //         vm.tenantList.options.push(item);
+            //     })
+            // });
+            return new Promise(function(resolve){
+                var path = "/garnet/data/roleManage/tenantList";
+                $.get(baseURL + "tenants/byuseridandpath?userId=" + userId + "&path=" + path, function (response) {
+                    $.each(response.data, function (index, item) {
+                        vm.tenantList.options.push(item);
+                    });
+                    resolve('getTenantList done');
+                });
+            });
+        },
+        /**  获取应用列表 */
+        getAppList: function () {
+            // $.get(baseURL + "applications?page=1&limit=1000&userId=" + userId, function (response) {
+            //     $.each(response.list, function (index, item) {
+            //         vm.appList.options.push(item);
+            //     })
+            // });
+            return new Promise(function(resolve){
+                var tenantId = vm.tenantList.selectedTenant;
+                var path = "/garnet/data/roleManage/tenantList";
+                $.get(baseURL + "applications/byuseridandtenantid?userId=" + userId + "&tenantId=" + tenantId + "&path=" + path, function (response) {
+                    $.each(response, function (index, item) {
+                        vm.appList.options.push(item);
+                    });
+                    resolve('getAppList done');
+                });
+            });
+        },
+        /** 加载组 */
+        roadGroupTree:function () {
+            // $.get(baseURL + "groups/tenantId/" + vm.tenantList.selectedTenant, function (response) {
+            $.get(baseURL + "groups/byparams?tenantId=" + vm.tenantList.selectedTenant + "&applicationId=" + vm.appList.selectedApp, function (response) {
+                groupTree = $.fn.zTree.init($("#groupTree"), groupTreeSetting, response);
+                groupTree.expandAll(true);
+            })
+
+        },
+        /** 根据应用重新加载组 */
+        roadGroupTreeByApp:function () {
+            $.get(baseURL + "groups/applicationId/" + vm.appList.selectedApp, function (response) {
+                groupTree = $.fn.zTree.init($("#groupTree"), groupTreeSetting, response);
+                groupTree.expandAll(true);
+            })
+
+        },
+        /** 加载权限树 */
+        roadPermissionTree:function () {
+            //加载权限树
+            // $.get(baseURL + "permissions/tenantId/" + vm.tenantList.selectedTenant, function (response) {
+            $.get(baseURL + "permissions/byparams?tenantId=" + vm.tenantList.selectedTenant + "&applicationId=" + vm.appList.selectedApp, function (response) {
+                permissionTree = $.fn.zTree.init($("#permissionTree"), permissionTreeSetting, response);
+                permissionTree.expandAll(true);
+
+                //加载组
+                vm.roadGroupTree();
+            })
+        },
+        /** 根据应用重新加载权限树 */
+        roadPermissionTreeByApp:function () {
+            //加载权限树
+            $.get(baseURL + "permissions/applicationId/" + vm.appList.selectedApp, function (response) {
+                permissionTree = $.fn.zTree.init($("#permissionTree"), permissionTreeSetting, response);
+                permissionTree.expandAll(true);
+
+                //根据应用加载组
+                vm.roadGroupTreeByApp();
+            })
+        },
+        getSearchTenantList: function () {
+            var path = "/garnet/data/roleManage/tenantList";
+            $.get(baseURL + "tenants/byuseridandpath?userId=" + userId + "&path=" + path, function (response) {
+                vm.tenantSearchList.options = [];
+                $.each(response.data, function (index, item) {
+                    // vm.tenantList.options.push(item);
+                    vm.tenantSearchList.options.push(item);
+                })
+            });
+        },
+        getSearchAppList: function () {
+            var path = "/garnet/data/roleManage/tenantList";
+            $.get(baseURL + "applications/byuseridandtenantid?userId=" + userId + "&path=" + path, function (response) {
+                vm.appSearchList.options = [];
+                $.each(response, function (index, item) {
+                    vm.appSearchList.options.push(item);
+                })
+            });
+        },
+        getRolesByTeantIdAndAppId: function () {
+            vm.searchApp = vm.appSearchList.searchApp;
+            vm.searchTenant = vm.tenantSearchList.searchTenant;
+            vm.reload(true);
+        },
+        getPermissionAction: function () {
+            var type;
+            var path = "/garnet/option/roleManage/types";
+            $.get(baseURL + "/resources/gettype?userId=" + userId + "&path=" + path, function (response) {
+                type = response.data;
+            });
+            var path1 = path + "/" + type;
+            // console.log("path1：" + path1);
+            $.get(baseURL + "/resources/getuseraction?userId=" + userId + "&path=" + path1, function (response) {
+                var action = response.data;
+                // console.log("action: " + action);
+                if (action == "read") {
+                    vm.typesEditAble = false;
+                } else {
+                    vm.typesEditAble = true;
+                }
+            });
+        }
+    },
+    /**  初始化页面时执行该方法 */
+    created: function () {
+        this.getSearchTenantList();
+        this.getSearchAppList();
+        // this.getCurrentUser();
+    }
+});

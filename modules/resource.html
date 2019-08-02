@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html xmlns:v-bind="http://www.w3.org/1999/xhtml">
+<head>
+    <title>资源管理</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content="width=device-width, initial-scale=1, maximum-scale=1, menu-scalable=no" name="viewport">
+    <link rel="stylesheet" href="../css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/font-awesome.min.css">
+    <link rel="stylesheet" href="../plugins/jqgrid/ui.jqgrid-bootstrap.css">
+    <link rel="stylesheet" href="../plugins/ztree/css/metroStyle/metroStyle.css">
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../libs/sweetalert/sweetalert.css">
+    <script src="../libs/jquery-3.4.1-responseurl.min.js"></script>
+    <script src="../plugins/layer/layer.js"></script>
+    <script src="../libs/bootstrap.min.js"></script>
+    <script src="../libs/vue.min.js"></script>
+    <script src="../plugins/jqgrid/grid.locale-cn.js"></script>
+    <script src="../plugins/jqgrid/jquery.jqGrid.min.js"></script>
+    <script src="../plugins/ztree/jquery.ztree.all.min.js"></script>
+    <script src="../libs/sweetalert/sweetalert.min.js"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/common.js"></script>
+    <script>    
+        var resources = JSON.parse(localStorage.getItem('sysAppCode'));
+    </script>
+</head>
+
+<body>
+<div id="garnetApp" v-cloak style="margin: 15px;">
+    <div v-show="showList">
+        <div class="grid-btn">
+            <div class="form-group col-sm-2">
+                <input class="form-control" v-model="searchName" @keyup.enter="query" placeholder="资源名称">
+            </div>
+            <a class="btn btn-default" @click="query">查询</a>
+            <a class="btn btn-default" @click="view">查看</a>
+            <div class="form-group col-sm-1"  style="width: 200px">
+                <select class="form-control" v-model="tenantSearchList.searchTenant" @change="getResourceByTeantIdAndAppId">
+                    <option disabled value=""> 租户查询 </option>
+                    <option v-for="option in tenantSearchList.options" v-bind:value="option.id">
+                        {{ option.name }}
+                    </option>
+                </select>
+            </div>
+            <div class="form-group col-sm-1"  style="width: 200px">
+                <select class="form-control" v-model="option.appSearchId" @change="getResourceByTypeAndApp">
+                    <option disabled value=""> 应用查询 </option>
+                    <option v-for="option in appSearchList.options" v-bind:value="option.id">
+                        {{ option.name }}
+                    </option>
+                </select>
+            </div>
+            <div class="form-group col-sm-1" style="width: 200px">
+                <select class="form-control" v-model="searchTypeOption.searchType" @change="getResourceByTypeAndApp">
+                    <option disabled value=""> 类型查询 </option>
+                    <option v-for="option in typeSearchList.options" v-bind:value="option.type">
+                        {{ option.name }}
+                    </option>
+                </select>
+            </div>
+            <div style="margin: 15px; display: block">
+                <a class="btn btn-primary" @click="add" v-if="resources.garnetDevelopmentResourceAdd">
+                    <i class="fa fa-plus"></i>&nbsp;新增</a>
+                <!-- <a class="btn btn-primary" @click="update" v-if="resources.garnetDevelopmentResourceUpdate">
+                    <i class="fa fa-pencil-square-o"></i>&nbsp;修改</a> -->
+                <a class="btn btn-primary" @click="del" v-if="resources.garnetDevelopmentResourceDelete">
+                    <i class="fa fa-trash-o"></i>&nbsp;删除</a>
+                <a class="btn btn-primary" @click="inputExcel">导入Excel</a>
+                    <input type="file" id="file" v-show="false"  @change="importFile(this)"  accept="application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>
+                <!--<a id="" class="btn btn-primary" href="http://192.168.111.100:12306/garnet/api/v1.0/download/resourceexcel">下载Excel模板</a>-->
+                <a id="" class="btn btn-primary" href="/garnet/api/v1.0/download/resourceexcel">下载Excel模板</a>
+            </div>
+            <!--<a class="btn btn-primary" @click="update" v-if="resources.garnetDevelopmentResourceUpdate">-->
+                <!--<i class="fa fa-pencil-square-o"></i>&nbsp;查看</a>-->
+        </div>
+        <table id="jqGrid"></table>
+        <div id="jqGridPager"></div>
+    </div>
+
+    <div v-show="!showList1" class="panel panel-default">
+        <div class="panel-heading">{{title}}</div>
+        <form class="form-horizontal">
+            <div class="form-group">
+                <div class="col-sm-2 control-label">资源名称<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.name" placeholder="长度不大于60" maxlength="60"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">资源描述<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.remark" placeholder="资源描述"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">路径标识<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.path" placeholder="可填如/garnet.html" maxlength="60"/>
+                </div>
+            </div>
+
+            <div class="form-group" v-show="showType">
+                <div class="col-sm-2 control-label">类型<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <select class="form-control" v-model="typeList1.selectedType" @change="selectType1"  id="typeList" :disabled="!typesEditAble">
+                        <option disabled value="">--请选择--</option>
+                        <option v-for="option in typeList1.options" v-bind:value="option.id">
+                            {{ option.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group" v-bind:hidden="!showTenant">
+                <div class="col-sm-2 control-label">所属租户<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <select class="form-control" v-model="tenantList.selectedTenant" @change="selectTenant">
+                        <option disabled value="">--请选择--</option>
+                        <option v-for="option in tenantList.options" v-bind:value="option.id">
+                            {{ option.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group" v-bind:hidden="!showApplication">
+                <div class="col-sm-2 control-label">所属应用<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <select class="form-control" v-model="appList.selectedApp" @change="selectApp">
+                        <option disabled value="">--请选择--</option>
+                        <option v-for="option in appList.options" v-bind:value="option.id">
+                            {{ option.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label">所属租户</div>-->
+                <!--<div class="col-sm-10">-->
+                    <!--&lt;!&ndash;@change="selectTenant"&ndash;&gt;-->
+                    <!--<select class="form-control" v-model="tenantList.selectedTenant">-->
+                        <!--<option v-for="option in tenantList.options" v-bind:value="option.id">-->
+                            <!--{{ option.name }}-->
+                        <!--</option>-->
+                    <!--</select>-->
+                <!--</div>-->
+            <!--</div>-->
+            <div class="form-group">
+                <div class="col-sm-2 control-label">资源配置类型<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <!--@change="selectType"-->
+                    <select class="form-control" v-model="typeList.selectedType" @change="selectType">
+                        <option disabled value="">--请选择--</option>
+                        <option v-for="option in typeList.options" v-bind:value="option.type">
+                            {{ option.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label">action</div>-->
+                <!--<div class="col-sm-10">-->
+                    <!--<input class="form-control" v-model="resource.actions" placeholder="action"/>-->
+                <!--</div>-->
+            <!--</div>-->
+            <!--<div class="form-group">-->
+                <!--<div class="col-sm-2 control-label">行为组<span style="color: #d7220a">*</span></div>-->
+                <!--<label>-->
+                    <!--<input type="checkbox" v-model="actionsEdit" value="edit"/> edit-->
+                <!--</label>-->
+                <!--<label>-->
+                    <!--<input type="checkbox" v-model="actionsReadonly" value="readonly"/> readonly-->
+                <!--</label>-->
+            <!--</div>-->
+
+            <div class="form-group" id="varchar00" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar001">varchar00</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar00" v-bind:placeholder="resource.varchar00description"/>
+                    <!--<input class="form-control" readonly="readonly" v-model="resourceDynamicPropertyList[00].description" placeholder="boolean04"/>-->
+                </div>
+            </div>
+            <div class="form-group" id="varchar01" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar011">varchar01</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar01" v-bind:placeholder="resource.varchar01description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar02" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar021">varchar02</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar02" v-bind:placeholder="resource.varchar02description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar03" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar031">varchar03</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar03" v-bind:placeholder="resource.varchar03description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar04" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar041">varchar04</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar04" v-bind:placeholder="resource.varchar04description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar05" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar051">varchar05</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar05" v-bind:placeholder="resource.varchar05description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar06" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar061">varchar06</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar06" v-bind:placeholder="resource.varchar06description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar07" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar071">varchar07</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar07" v-bind:placeholder="resource.varchar07description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar08" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar081">varchar08</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar08" v-bind:placeholder="resource.varchar08description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar09" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar091">varchar09</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar09" v-bind:placeholder="resource.varchar09description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar10" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar101">varchar10</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar10" v-bind:placeholder="resource.varchar10description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar11" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar111">varchar11</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar11" v-bind:placeholder="resource.varchar11description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar12" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar121">varchar12</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar12" v-bind:placeholder="resource.varchar12description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar13" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar131">varchar13</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar13" v-bind:placeholder="resource.varchar13description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar14" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar141">varchar14</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar14" v-bind:placeholder="resource.varchar14description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar15" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar151">varchar15</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar15" v-bind:placeholder="resource.varchar15description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar16" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar161">varchar16</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar16" v-bind:placeholder="resource.varchar16description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar17" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar171">varchar17</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar17" v-bind:placeholder="resource.varchar17description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar18" style="display: none">
+                <div class="col-sm-2 control-label" id="181">varchar18</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar18" v-bind:placeholder="resource.varchar18description"/>
+                </div>
+            </div>
+            <div class="form-group" id="varchar19" style="display: none">
+                <div class="col-sm-2 control-label" id="varchar191">varchar19</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.varchar19" v-bind:placeholder="resource.varchar19description"/>
+                </div>
+            </div>
+        <!--</form>-->
+
+        <!--<form class="form-horizontal div-right">-->
+            <div class="form-group" id="int01" style="display: none">
+                <div class="col-sm-2 control-label" id="int011">int01</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.int01" v-bind:placeholder="resource.int01description"/>
+                </div>
+            </div>
+            <div class="form-group" id="int02" style="display: none">
+                <div class="col-sm-2 control-label" id="int021">int02</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.int02" v-bind:placeholder="resource.int02description"/>
+                </div>
+            </div>
+            <div class="form-group" id="int03" style="display: none">
+                <div class="col-sm-2 control-label" id="int031">int03</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.int03" v-bind:placeholder="resource.int03description"/>
+
+                </div>
+            </div>
+            <div class="form-group" id="int04" style="display: none">
+                <div class="col-sm-2 control-label" id="int041">int04</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="resource.int04" v-bind:placeholder="resource.int04description"/>
+                </div>
+            </div>
+            <div class="form-group" id="int05" style="display: none">
+                <div class="col-sm-2 control-label" id="int051">int05</div>
+                <div class="col-sm-10">
+                   <input class="form-control" v-model="resource.int05" v-bind:placeholder="resource.int05description" />
+                </div>
+            </div>
+            <div class="form-group" id="boolean01" style="display: none">
+                <div class="col-sm-2 control-label" id="boolean011">boolean01</div>
+                <label class="radio-inline">
+                    <input type="radio" name="boolean01" value="false" v-model="resource.boolean01"/> false
+                </label>
+                <label class="radio-inline">
+                    <input type="radio" name="boolean01" value="true" v-model="resource.boolean01"/> true
+                    <!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-->
+                    <!--<input  v-model="resource.boolean01description" readonly="readonly" style="color: #d73925;border:none; margin-left: 10px; width: 160px;"/>-->
+                </label>
+            </div>
+            <div class="form-group" id="boolean02" style="display: none">
+                <div class="col-sm-2 control-label" id="boolean021">boolean02</div>
+                <label class="radio-inline">
+                    <input type="radio" name="boolean02" value="false" v-model="resource.boolean02"/> false
+                </label>
+                <label class="radio-inline">
+                    <input type="radio" name="boolean02" value="true" v-model="resource.boolean02"/> true
+                    <!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-->
+                    <!--<input  v-model="resource.boolean02description" readonly="readonly" style="color: #d73925;border:none; margin-left: 10px; width: 160px;"/>-->
+                </label>
+            </div>
+            <div class="form-group" id="boolean03" style="display: none">
+                <div class="col-sm-2 control-label" id="boolean031">boolean03</div>
+                <label class="radio-inline">
+                    <input type="radio" name="boolean03" value="false" v-model="resource.boolean03"/> false
+                </label>
+                <label class="radio-inline">
+                    <input type="radio" name="boolean03" value="true" v-model="resource.boolean03"/> true
+                    <!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-->
+                    <!--<input  v-model="resource.boolean03description" readonly="readonly" style="color: #d73925;border:none; margin-left: 10px; width: 160px;"/>-->
+                </label>
+            </div>
+            <div class="form-group" id="boolean04" style="display: none">
+                <div class="col-sm-2 control-label" id="boolean041">boolean04</div>
+                <label class="radio-inline">
+                    <input type="radio" name="boolean04" value="false" v-model="resource.boolean04"/> false
+                </label>
+                <label class="radio-inline">
+                    <input type="radio" name="boolean04" value="true" v-model="resource.boolean04"/> true
+                    <!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-->
+                    <!--<input  v-model="resource.boolean04description" readonly="readonly" style="color: #d73925;border:none; margin-left: 10px; width: 160px;"/>-->
+                </label>
+            </div>
+
+            <div class="form-group">
+                <div class="col-sm-2 control-label"></div>
+                <input type="button" class="btn btn-primary" @click="saveOrUpdate" value="确定"/>
+                &nbsp;&nbsp;&nbsp;&nbsp;<input type="button" class="btn btn-warning" @click="reload(false)" value="返回"/>
+            </div>
+        </form>
+        <input type="button" class="btn btn-warning floating-btn" @click="reload(false)" value="返回"/>
+    </div>
+
+
+    <div v-show="showResourceDetail">
+        <textarea v-model="resourceDetail" readonly="readonly" style="width: 100%; height: 720px"></textarea>
+        <input type="button" class="btn btn-primary" @click="resourceDetailReturn" value="返回"/>
+    </div>
+</div>
+
+<script type="text/javascript">
+    $(function(){
+        $('input:radio').click(function(){
+
+            var domName = $(this).attr('name');
+            var $radio = $(this);
+            // if this was previously checked
+            if ($radio.data('waschecked') == true){
+                $radio.prop('checked', false);
+                $("input:radio[name='" + domName + "']").data('waschecked',false);
+
+                if ("boolean01" == domName) {
+                    vm.resource.boolean01 = null;
+                } else if ("boolean02" == domName) {
+                    vm.resource.boolean02 = null;
+                } else if ("boolean03" == domName) {
+                    vm.resource.boolean03 = null;
+                } else if ("boolean04" == domName) {
+                    vm.resource.boolean04 = null;
+                }
+            } else {
+                $radio.prop('checked', true);
+                $("input:radio[name='" + domName + "']").data('waschecked',false);
+                $radio.data('waschecked', true);
+            }
+        });
+    });
+</script>
+
+<!-- 选择资源 -->
+<div id="resourceLayer" style="display: none;padding:10px;">
+    <ul id="resourceTree" class="ztree"></ul>
+</div>
+
+<script src="../libs/router.js"></script>
+<!-- <script src="../js/index.js"></script> -->
+<script src="../js/modules/resource.js"></script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html xmlns:v-bind="http://www.w3.org/1999/xhtml">
+<head>
+    <title>应用管理</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+    <link rel="stylesheet" href="../css/bootstrap.min.css">
+    <link rel="stylesheet" href="../css/font-awesome.min.css">
+    <link rel="stylesheet" href="../plugins/jqgrid/ui.jqgrid-bootstrap.css">
+    <link rel="stylesheet" href="../plugins/ztree/css/metroStyle/metroStyle.css">
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../libs/sweetalert/sweetalert.css">
+    <script src="../libs/jquery-3.4.1-responseurl.min.js"></script>
+    <script src="../plugins/layer/layer.js"></script>
+    <script src="../libs/bootstrap.min.js"></script>
+    <script src="../libs/vue.min.js"></script>
+    <script src="../plugins/jqgrid/grid.locale-cn.js"></script>
+    <script src="../plugins/jqgrid/jquery.jqGrid.min.js"></script>
+    <script src="../plugins/ztree/jquery.ztree.all.min.js"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/common.js"></script>
+    <script src="../libs/sweetalert/sweetalert.min.js"></script>
+    <script>    
+        var resources = JSON.parse(localStorage.getItem('sysAppCode'));
+    </script>
+</head>
+
+<body>
+<div id="garnetApp" v-cloak style="margin: 15px;">
+    <div v-show="showList">
+        <div class="grid-btn">
+            <div class="form-group col-sm-2">
+                <input class="form-control" v-model="searchName" @keyup.enter="query" placeholder="应用名">
+            </div>
+            <a class="btn btn-default" @click="query">查询</a>
+
+            <div class="form-group col-sm-2">
+                <select class="form-control" v-model="modeList.selectedMode" @change="selectMode" id="selectModeId">
+                    <!--<option disabled value="">-&#45;&#45;&#45;&#45;请选择模式-&#45;&#45;&#45;&#45;</option>-->
+                    <option v-for="option in modeList.options" v-bind:value="option.id">
+                        {{ option.name }}
+                    </option>
+                </select>
+            </div>
+
+            <a class="btn btn-primary" @click="add" v-if="resources.garnetSysManagementApplicationAdd">
+                <i class="fa fa-plus"></i>&nbsp;新增</a>
+            <!-- <a class="btn btn-primary" @click="update" v-if="resources.garnetSysManagementApplicationUpdate">
+                <i class="fa fa-pencil-square-o"></i>&nbsp;修改</a> -->
+            <a class="btn btn-primary" @click="del" v-if="resources.garnetSysManagementApplicationDelete">
+                <i class="fa fa-trash-o"></i>&nbsp;删除</a>
+        </div>
+        <table id="jqGrid"></table>
+        <div id="jqGridPager"></div>
+    </div>
+
+    <div v-show="!showList" class="panel panel-default">
+        <div class="panel-heading">{{title}}</div>
+        <form class="form-horizontal">
+            <div class="form-group" style="display: none">
+                <div class="col-sm-2 control-label">id</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="application.id" placeholder="id"/>
+                </div>
+            </div>
+            <div class="form-group" v-show="!hidden">
+                <div class="col-sm-2 control-label">平台模式<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <select class="form-control" v-model="modeList2.selectedMode" @change="selectMode2" id="modeListId"  :disabled="!modeEditAble">
+                        <option disabled value="">--请选择--</option>
+                        <option v-for="option in modeList2.options" v-bind:value="option.id" >
+                            {{ option.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">应用名称<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="application.name" placeholder="长度不大于30" maxlength="30"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">应用标识<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <input class="form-control" id="appCode" v-model="application.appCode" placeholder="只能填写英文、下划线、连字符且长度不大于30" maxlength="30"/>
+                    <!--<span id="appCodeErr" style="color: #d73925">应用标识</span>-->
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">应用首页URL<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="application.defaultIndexUrl" placeholder="填写应用默认首页链接"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">选择租户</div>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" style="cursor:pointer;" v-model="application.tenantNames"
+                           @click="tenantTree(application)" readonly="readonly" v-bind:placeholder="tips"></input>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">所属公司<span style="color: #d7220a">*</span></div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="application.company" placeholder="长度不大于30" maxlength="30"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">刷新资源Api</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="application.refreshResourcesApi" placeholder="刷新资源Api"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-2 control-label">主机</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="application.hosts" placeholder="主机"/>
+                </div>
+            </div>
+            <div class="form-group" style="display: none;">
+                <div class="col-sm-2 control-label">创建时间</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="application.createdTime" placeholder="创建时间"/>
+                </div>
+            </div>
+            <div class="form-group" style="display: none;">
+                <div class="col-sm-2 control-label">更新时间</div>
+                <div class="col-sm-10">
+                    <input class="form-control" v-model="application.modifiedTime" placeholder="更新时间"/>
+                </div>
+            </div>
+
+
+            <div class="form-group">
+                <div class="col-sm-2 control-label"></div>
+                <!--<input type="button" class="btn btn-primary" @click="saveOrUpdate" value="确定" :disabled="!appUpdateButton"/>-->
+                <input type="button" class="btn btn-primary" @click="saveOrUpdate" value="确定"/>
+                &nbsp;&nbsp;<input type="button" class="btn btn-warning" @click="reload(false)" value="返回"/>
+            </div>
+        </form>
+        <input type="button" class="btn btn-warning floating-btn" @click="reload(false)" value="返回"/>
+    </div>
+</div>
+
+<!-- 选择租户 -->
+<div id="tenantLayer" style="display: none;padding:10px;">
+    <!--<form class="form-horizontal" style="width: 280px;">-->
+    <div class="form-group">
+        <div class="col-sm-10">
+            <input class="form-control" placeholder="租户名" id="laySearchName" autocomplete="off">
+        </div>
+        <div class="col-sm-2">
+            <input type="button" class="btn btn-default"  id="laySearch" value="search"/>
+        </div>
+    </div>
+    <div class="form-group" style="padding-top: 20px;">
+        <ul id="tenantTree" class="ztree"></ul>
+    </div>
+    <!--</form>-->
+</div>
+
+<script type="text/javascript">
+    function checkAppCode() {
+        console.log("ocming...");
+
+        var chineseReg = /^[\u4e00-\u9fa5]{0,}$/; // 中文正则
+        var specialReg = /^(?!_)(?!.*?_$)[-a-zA-Z0-9_\u4e00-\u9fa5]+$/;//非特殊符号的正则表达式
+
+
+        var appCode = document.getElementById("appCode");
+        var appCodeErr = document.getElementById("appCodeErr");
+
+        if (appCode == null || $.trim(appCode) == "") {
+            appCodeErr.innerHTML="应用标识不能为空";
+            // appCodeErr.style.display = "";
+            return false;
+        } else {
+            // appCodeErr.style.display="none"
+        }
+
+        if (chineseReg.test(appCode)) {
+            appCodeErr.innerHTML="应用标识不能为中文";
+            // appCodeErr.style.display="";
+            return false;
+        } else {
+            // appCodeErr.style.display="none"
+        }
+        if (!specialReg.test(appCode)) {
+            appCodeErr.innerHTML = "应用标识只能使用英文、数字、下划线或者连字符";
+            // appCodeErr.style.display="";
+            return false;
+        } else {
+            // appCodeErr.style.display="none"
+        }
+
+        if (appCode.length < 4 || appCode.length > 20) {
+
+            appCodeErr.innerHTML="应用标识长度不能大于30";
+            // appCodeErr.style.display="";
+            return false;
+        } else {
+            // appCodeErr.style.display="none"
+        }
+    }
+
+</script>
+
+<script src="../libs/router.js"></script>
+<!-- <script src="../js/index.js"></script> -->
+<script src="../js/modules/application.js"></script>
+</body>
+</html>
